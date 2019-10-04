@@ -210,7 +210,7 @@ func TestUpdateSecret(t *testing.T) {
 	})
 	assert.Equal(t, codes.InvalidArgument, testutils.ErrorCode(err), testutils.ErrorDesc(err))
 
-	// updating the secret with the original spec succeeds
+	// updating the secret with the original spec returns an AlreadyExists error
 	secret.Spec.Data = []byte("data")
 	secret.Spec.Annotations.Name = "name"
 	assert.NotNil(t, secret.Spec.Data)
@@ -219,9 +219,7 @@ func TestUpdateSecret(t *testing.T) {
 		Spec:          &secret.Spec,
 		SecretVersion: &secret.Meta.Version,
 	})
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.NotNil(t, resp.Secret)
+	assert.Equal(t, codes.AlreadyExists, testutils.ErrorCode(err), testutils.ErrorDesc(err))
 
 	// updating an existing secret's labels returns the secret with all the private data cleaned
 	newLabels := map[string]string{"mod2": "0", "mod4": "0", "mod6": "0"}

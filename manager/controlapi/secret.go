@@ -3,6 +3,8 @@ package controlapi
 import (
 	"context"
 	"crypto/subtle"
+	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/docker/swarmkit/api"
@@ -47,6 +49,7 @@ func (s *Server) GetSecret(ctx context.Context, request *api.GetSecretRequest) (
 }
 
 // UpdateSecret updates a Secret referenced by SecretID with the given SecretSpec.
+// We only allow updating Labels
 // - Returns `NotFound` if the Secret is not found.
 // - Returns `InvalidArgument` if the SecretSpec is malformed or anything other than Labels is changed
 // - Returns an error if the update fails.
@@ -61,17 +64,28 @@ func (s *Server) UpdateSecret(ctx context.Context, request *api.UpdateSecretRequ
 			return status.Errorf(codes.NotFound, "secret %s not found", request.SecretID)
 		}
 
-		// Check if the Name is different than the current name, or the secret is non-nil and different
-		// than the current secret
+		// Determine if secret is different than the current secret
+		// - 1 indicates the secrets match
+		// - 0 indicates the secrets differ
+		secretDiff := subtle.ConstantTimeCompare(request.Spec.Data, secret.Spec.Data)
+
+		// If the Name is different than the current name, or the secret is non-nil and different
+		// than the current secret do not update the secret
 		if secret.Spec.Annotations.Name != request.Spec.Annotations.Name ||
-			(request.Spec.Data != nil && subtle.ConstantTimeCompare(request.Spec.Data, secret.Spec.Data) == 0) {
+			(request.Spec.Data != nil && secretDiff == 0) {
 			return status.Errorf(codes.InvalidArgument, "only updates to Labels are allowed")
 		}
-
-		// We only allow updating Labels
+		// If the secret is the same as the current secret and the labels are the same
+		// return an error and do nothing
+		fmt.Printf("secret labels: %s", secret.Spec.Annotations.Labels)
+		fmt.Printf("request labels: %s", request.Spec.Annotations.Labels)
+		if reflect.DeepEqual(secret.Spec.Annotations.Labels, request.Spec.Annotations.Labels) &&
+			secretDiff == 1 {
+			return status.Errorf(codes.AlreadyExists, "the secret has not changed")
+		}
+		// Update the labels
 		secret.Meta.Version = *request.SecretVersion
 		secret.Spec.Annotations.Labels = request.Spec.Annotations.Labels
-
 		return store.UpdateSecret(tx, secret)
 	})
 	if err != nil {
