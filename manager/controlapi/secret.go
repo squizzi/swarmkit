@@ -65,14 +65,17 @@ func (s *Server) UpdateSecret(ctx context.Context, request *api.UpdateSecretRequ
 		// than the current secret
 		if secret.Spec.Annotations.Name != request.Spec.Annotations.Name ||
 			(request.Spec.Data != nil && subtle.ConstantTimeCompare(request.Spec.Data, secret.Spec.Data) == 0) {
-			return status.Errorf(codes.InvalidArgument, "only updates to Labels are allowed")
+			// If the secret differs, update the secret
+			// First, update the secret with the labels from the request
+			secret.Meta.Version = *request.SecretVersion
+			secret.Spec.Annotations.Labels = request.Spec.Annotations.Labels
+			// Then update the secret in the store
+			secretUpdateErr := store.UpdateSecret(tx, secret)
+			if secretUpdateErr != nil {
+				return status.Errorf(codes.Internal, "unable to update secret %s", request.SecretID)
+			}
 		}
-
-		// We only allow updating Labels
-		secret.Meta.Version = *request.SecretVersion
-		secret.Spec.Annotations.Labels = request.Spec.Annotations.Labels
-
-		return store.UpdateSecret(tx, secret)
+		return nil
 	})
 	if err != nil {
 		return nil, err

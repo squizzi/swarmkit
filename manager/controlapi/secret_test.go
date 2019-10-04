@@ -191,14 +191,16 @@ func TestUpdateSecret(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, codes.NotFound, testutils.ErrorCode(err), testutils.ErrorDesc(err))
 
-	// updating an existing secret's data returns an error
+	// updating an existing secret's data succeeds
 	secret.Spec.Data = []byte{1}
 	resp, err := ts.Client.UpdateSecret(context.Background(), &api.UpdateSecretRequest{
 		SecretID:      secret.ID,
 		Spec:          &secret.Spec,
 		SecretVersion: &secret.Meta.Version,
 	})
-	assert.Equal(t, codes.InvalidArgument, testutils.ErrorCode(err), testutils.ErrorDesc(err))
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.NotNil(t, resp.Secret)
 
 	// updating an existing secret's Name returns an error
 	secret.Spec.Data = nil
@@ -208,7 +210,7 @@ func TestUpdateSecret(t *testing.T) {
 		Spec:          &secret.Spec,
 		SecretVersion: &secret.Meta.Version,
 	})
-	assert.Equal(t, codes.InvalidArgument, testutils.ErrorCode(err), testutils.ErrorDesc(err))
+	assert.Equal(t, codes.Internal, testutils.ErrorCode(err), testutils.ErrorDesc(err))
 
 	// updating the secret with the original spec succeeds
 	secret.Spec.Data = []byte("data")
@@ -236,6 +238,8 @@ func TestUpdateSecret(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.NotNil(t, resp.Secret)
 	assert.Nil(t, resp.Secret.Spec.Data)
+	fmt.Println(resp.Secret.Spec.Annotations.Labels)
+	fmt.Println(newLabels)
 	assert.Equal(t, resp.Secret.Spec.Annotations.Labels, newLabels)
 
 	// updating a secret with nil data and correct name succeeds again
